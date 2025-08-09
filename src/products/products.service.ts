@@ -7,6 +7,7 @@ import { Product } from './entities/product.entity';
 import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { validate as isUuid } from 'uuid'
 import { ProductImage } from './entities/product-image.entity';
+import { User } from 'src/auth/entities/user.entity';
 
 @Injectable()
 export class ProductsService {
@@ -20,14 +21,16 @@ export class ProductsService {
 
   ) { }
 
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto, user: User) {
     try {
       const { images = [], ...productDetails } = createProductDto;
 
       const product = this._productRepository.create({
         ...productDetails,
+        user,
         images: images.map(image =>
           this._productImageRepository.create({ url: image }))
+
       });
       await this._productRepository.save(product);
       return { ...product, images };
@@ -80,7 +83,7 @@ export class ProductsService {
 
   }
 
-  async update(id: string, updateProductDto: UpdateProductDto) {
+  async update(id: string, updateProductDto: UpdateProductDto, user: User) {
     const { images = [], ...productDetails } = updateProductDto;
 
     const product = await this._productRepository.preload({
@@ -99,7 +102,8 @@ export class ProductsService {
       if (images.length) {
         await queryRunner.manager.delete(ProductImage, { product: { id } });
         product.images = images.map(image => this._productImageRepository.create({ url: image }))
-      } 
+      }
+      product.user = user;
       await queryRunner.manager.save(product);
       await queryRunner.commitTransaction();
       await queryRunner.release();
@@ -124,6 +128,15 @@ export class ProductsService {
     return {
       ...rest,
       images: images.map((img) => img.url)
+    }
+  }
+
+  async removeAll() {
+    const query = this._productRepository.createQueryBuilder('product');
+    try {
+      return await query.delete().where({}).execute()
+    } catch (error) {
+      this.handleDBExceptions(error)
     }
   }
 
